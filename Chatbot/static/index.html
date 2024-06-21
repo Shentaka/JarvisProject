@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Store Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('https://www.microsoft.com/en-us/research/uploads/prod/2023/03/AI_Microsoft_Research_Header_1920x720.png'); 
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #chat-container {
+            width: 90%;
+            max-width: 400px;
+            height: 80%;
+            max-height: 600px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: white;
+        }
+        #chat-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            position: relative;
+        }
+        #chatbox {
+            flex: 1;
+            padding: 10px;
+            background-color: #ecf0f1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        #userInputContainer {
+            display: flex;
+            padding: 10px;
+            background-color: white;
+            border-top: 1px solid #ccc;
+        }
+        #userInput {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        #voiceInput {
+            margin-left: 5px;
+            padding: 10px;
+            border: none;
+            background-color: #2c3e50;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .user {
+            background-color: #3498db;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+        .bot {
+            background-color: #ecf0f1;
+            color: #2c3e50;
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+            text-align: right;
+        }
+        .popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            font-size: 2em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="chat-header">
+            Jarvis
+        </div>
+        <div id="chatbox">
+            <div class="message bot" id="initialMessage">
+                Привет! Аз съм Jarvis, вашият асистент за онлайн пазаруване. С какво мога да ви бъда полезен днес?
+            </div>
+        </div>
+        <div id="userInputContainer">
+            <input type="text" id="userInput" placeholder="Въведете съобщение тук..." onfocus="removeInitialMessage()" onkeydown="if(event.key === 'Enter') sendMessage(false)">
+            <button id="voiceInput">🎤</button>
+        </div>
+    </div>
+
+    <div id="popup" class="popup" style="display: none;">
+        КРАЙ НА ЧАТА
+    </div>
+
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('userInput');
+        const voiceInputButton = document.getElementById('voiceInput');
+        const initialMessage = document.getElementById('initialMessage');
+        const popup = document.getElementById('popup');
+
+        function removeInitialMessage() {
+            if (initialMessage) {
+                initialMessage.remove();
+            }
+        }
+
+        function sendMessage(isVoice) {
+            const message = userInput.value.trim();
+            if (message === '') return;
+            appendMessage(`Вие: ${message}`, 'user');
+            userInput.value = '';
+            getBotResponse(message, isVoice);
+        }
+
+        function appendMessage(message, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = `message ${sender}`;
+            const timestamp = document.createElement('div');
+            timestamp.className = 'timestamp';
+            const now = new Date();
+            timestamp.textContent = now.toLocaleTimeString();
+            messageElement.appendChild(timestamp);
+            chatbox.appendChild(messageElement);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        async function getBotResponse(message, isVoice) {
+            try {
+                console.log('Изпращане на съобщение до сървъра:', message);
+                const response = await fetch('/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ queryText: message, isVoice: isVoice })
+                });
+
+                const data = await response.json();
+                console.log('Получен отговор от сървъра:', data);
+                appendMessage(`Jarvis: ${data.fulfillmentText}`, 'bot');
+                
+                if (isVoice && data.audioUrl) {
+                    console.log('Възпроизвеждане на аудио отговор:', data.audioUrl);
+                    const audio = new Audio(data.audioUrl);
+                    audio.play();
+                }
+
+                // Проверка за сигнал за край на чата
+                if (data.endChat) {
+                    popup.style.display = 'flex';
+                }
+
+            } catch (error) {
+                console.error('Грешка при получаване на отговор от сървъра:', error);
+                appendMessage('Jarvis: Възникна грешка при обработката на вашето запитване. Моля, опитайте отново.', 'bot');
+            }
+        }
+
+        // Гласово разпознаване
+        voiceInputButton.addEventListener('click', () => {
+            removeInitialMessage();
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'bg-BG';
+            recognition.start();
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                userInput.value = transcript;
+                sendMessage(true);
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Грешка при разпознаване:', event.error);
+            };
+        });
+    </script>
+</body>
+</html>
